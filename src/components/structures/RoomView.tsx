@@ -28,7 +28,7 @@ import { EventSubscription } from "fbemitter";
 import { ISearchResults } from 'matrix-js-sdk/src/@types/search';
 import { logger } from "matrix-js-sdk/src/logger";
 import { EventTimeline } from 'matrix-js-sdk/src/models/event-timeline';
-import { EventType } from 'matrix-js-sdk/src/@types/event';
+import { DisableableFeature, EventType } from 'matrix-js-sdk/src/@types/event';
 import { RoomState, RoomStateEvent } from 'matrix-js-sdk/src/models/room-state';
 import { EventTimelineSet } from "matrix-js-sdk/src/models/event-timeline-set";
 import { CallState, CallType, MatrixCall } from "matrix-js-sdk/src/webrtc/call";
@@ -62,7 +62,7 @@ import RoomContext, { TimelineRenderingType } from "../../contexts/RoomContext";
 import MatrixClientContext, { MatrixClientProps, withMatrixClientHOC } from "../../contexts/MatrixClientContext";
 import { E2EStatus, shieldStatusForRoom } from '../../utils/ShieldUtils';
 import { Action } from "../../dispatcher/actions";
-import { IMatrixClientCreds } from "../../MatrixClientPeg";
+import { IMatrixClientCreds, MatrixClientPeg } from "../../MatrixClientPeg";
 import ScrollPanel from "./ScrollPanel";
 import TimelinePanel from "./TimelinePanel";
 import ErrorBoundary from "../views/elements/ErrorBoundary";
@@ -425,6 +425,16 @@ export class RoomView extends React.Component<IRoomProps, IRoomState> {
             initialEventId: null, // default to clearing this, will get set later in the method if needed
             showRightPanel: RightPanelStore.instance.isOpenForRoom(roomId),
         };
+
+        // TODO: Don't do this. It requires a RoomViewStore update to get updated
+        // and this doesn't make one. Fix before upstream merge.
+        const cli = MatrixClientPeg.get();
+        if (cli) {
+            const room = cli.getRoom(roomId);
+            if (room) {
+                newState.showReadReceipts = newState.showReadReceipts && !room.isFeatureDisabled(DisableableFeature.ReadReceipts);
+            }
+        }
 
         const initialEventId = RoomViewStore.instance.getInitialEventId();
         if (initialEventId) {

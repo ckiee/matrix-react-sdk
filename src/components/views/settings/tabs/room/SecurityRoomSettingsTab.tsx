@@ -18,7 +18,7 @@ import React from 'react';
 import { GuestAccess, HistoryVisibility, JoinRule } from "matrix-js-sdk/src/@types/partials";
 import { MatrixEvent } from "matrix-js-sdk/src/models/event";
 import { RoomStateEvent } from "matrix-js-sdk/src/models/room-state";
-import { EventType } from 'matrix-js-sdk/src/@types/event';
+import { DisableableFeature, DisabledRoomFeatures, EventType, ROOM_DISABLED_FEATURES_STATE_TYPE } from 'matrix-js-sdk/src/@types/event';
 import { logger } from "matrix-js-sdk/src/logger";
 
 import { _t } from "../../../../../languageHandler";
@@ -46,6 +46,7 @@ interface IProps {
 }
 
 interface IState {
+    roomFeatures: DisabledRoomFeatures
     guestAccess: GuestAccess;
     history: HistoryVisibility;
     hasAliases: boolean;
@@ -60,7 +61,8 @@ export default class SecurityRoomSettingsTab extends React.Component<IProps, ISt
     constructor(props, context) {
         super(props, context);
 
-        const state = context.getRoom(this.props.roomId).currentState;
+        const room = context.getRoom(this.props.roomId);
+        const state = room.currentState;
 
         this.state = {
             guestAccess: this.pullContentPropertyFromEvent<GuestAccess>(
@@ -73,6 +75,7 @@ export default class SecurityRoomSettingsTab extends React.Component<IProps, ISt
                 'history_visibility',
                 HistoryVisibility.Shared,
             ),
+            roomFeatures: room.getDisabledFeatures(),
             hasAliases: false, // async loaded in componentDidMount
             encrypted: context.isRoomEncrypted(this.props.roomId),
             showAdvancedSection: false,
@@ -345,6 +348,49 @@ export default class SecurityRoomSettingsTab extends React.Component<IProps, ISt
         </SettingsFieldset>);
     }
 
+    private renderRoomFeatures() {
+        const client = this.context;
+        const room = client.getRoom(this.props.roomId);
+        const state = this.state.roomFeatures;
+        const canChange = room.currentState.mayClientSendStateEvent(ROOM_DISABLED_FEATURES_STATE_TYPE.name, client);
+
+        const features = [
+            {
+                id: DisableableFeature.ReadReceipts,
+                label: "Read receipts"
+            },
+        ];
+
+        const toggleFeature = (id: DisableableFeature) => enabled => {
+            const prevState = { disabled_features: [...state.disabled_features] };
+
+            if (!enabled) {
+                state.disabled_features.push(id);
+            } else {
+                state.disabled_features = state.disabled_features.filter(x => x !== id);
+            }
+
+            this.setState({ roomFeatures: state });
+            this.context.sendStateEvent(this.props.roomId, ROOM_DISABLED_FEATURES_STATE_TYPE.name, state, "")
+                .catch((e) => {
+                    logger.error(e);
+                    this.setState({ roomFeatures: prevState });
+                });
+        };
+
+        const rendered = features.map(({ id, label }) =>
+            <LabelledToggleSwitch
+                key={id}
+                value={state ? !state.disabled_features.includes(id) : true}
+                onChange={toggleFeature(id)}
+                disabled={!canChange}
+                label={_t(label)} />)
+
+        return (<SettingsFieldset legend={_t("Room features")}>
+            {rendered}
+        </SettingsFieldset>);
+    }
+
     private toggleAdvancedSection = () => {
         this.setState({ showAdvancedSection: !this.state.showAdvancedSection });
     };
@@ -387,6 +433,7 @@ export default class SecurityRoomSettingsTab extends React.Component<IProps, ISt
         }
 
         const historySection = this.renderHistory();
+        const roomFeatureSection = this.renderRoomFeatures();
 
         let advanced;
         if (room.getJoinRule() === JoinRule.Public) {
@@ -422,6 +469,7 @@ export default class SecurityRoomSettingsTab extends React.Component<IProps, ISt
 
                 { advanced }
                 { historySection }
+                { roomFeatureSection }
             </div>
         );
     }

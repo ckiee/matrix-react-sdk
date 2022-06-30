@@ -21,7 +21,7 @@ import { MatrixEvent, MatrixEventEvent } from "matrix-js-sdk/src/models/event";
 import { EventTimelineSet, IRoomTimelineData } from "matrix-js-sdk/src/models/event-timeline-set";
 import { Direction, EventTimeline } from "matrix-js-sdk/src/models/event-timeline";
 import { TimelineWindow } from "matrix-js-sdk/src/timeline-window";
-import { EventType, RelationType } from 'matrix-js-sdk/src/@types/event';
+import { DisableableFeature, EventType, RelationType } from 'matrix-js-sdk/src/@types/event';
 import { SyncState } from 'matrix-js-sdk/src/sync';
 import { RoomMember, RoomMemberEvent } from 'matrix-js-sdk/src/models/room-member';
 import { debounce, throttle } from 'lodash';
@@ -885,6 +885,7 @@ class TimelinePanel extends React.Component<IProps, IState> {
 
         if (!this.messagePanel.current) return;
         if (!this.props.manageReadReceipts) return;
+
         // This happens on user_activity_end which is delayed, and it's
         // very possible have logged out within that timeframe, so check
         // we still have a client.
@@ -943,7 +944,8 @@ class TimelinePanel extends React.Component<IProps, IState> {
             this.lastRMSentEventId = this.state.readMarkerEventId;
 
             const roomId = this.props.timelineSet.room.roomId;
-            const hiddenRR = SettingsStore.getValue("feature_hidden_read_receipts", roomId);
+            const hiddenRR = SettingsStore.getValue("feature_hidden_read_receipts", roomId)
+                && !this.props.timelineSet.room.isFeatureDisabled(DisableableFeature.ReadReceipts);
 
             debuglog('Sending Read Markers for ',
                 this.props.timelineSet.room.roomId,
